@@ -1,0 +1,58 @@
+components_manager:
+  task_processors:
+    main-task-processor:
+      worker_threads: 4
+    fs-task-processor:
+      worker_threads: 2
+  default_task_processor: main-task-processor
+
+  components:
+    server:
+      listener:
+        port: 8080
+        task_processor: main-task-processor
+      listener-monitor:
+        port: 8081
+        task_processor: main-task-processor
+
+    logging:
+      fs-task-processor: fs-task-processor
+      loggers:
+        default:
+          file_path: '@stderr'
+          level: info
+          overflow_behavior: discard
+
+    dynamic-config:
+      defaults:
+        HTTP_CLIENT_CONNECTION_POOL_SIZE: 1000
+
+    testsuite-support: {}
+
+    http-client:
+      load-enabled: false
+      fs-task-processor: fs-task-processor
+
+    dns-client:
+      fs-task-processor: fs-task-processor
+
+    tests-control:
+      load-enabled: false
+      path: /tests/{action}
+      method: POST
+      task_processor: main-task-processor
+
+    handler-ping:
+      path: /ping
+      method: GET
+      throttling_enabled: false
+      url_trailing_slash: strict-match
+      task_processor: main-task-processor
+
+    handler-database:
+      path: /database
+      method: GET,DELETE,PUT,POST
+      task_processor: main-task-processor
+
+    tracer:
+      service-name: my-service
