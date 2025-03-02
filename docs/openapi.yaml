@@ -1,0 +1,155 @@
+openapi: 3.0.3
+info:
+  title: Clarity Database API
+  version: "1.0.0"
+  description: >
+    Key-value база данных на основе userver.
+servers:
+  - url: http://localhost:8080
+    description: Локальный сервер
+
+paths:
+  /database/{key}:
+    parameters:
+      - name: key
+        in: path
+        description: Ключ для доступа к значению в базе данных
+        required: true
+        schema:
+          type: string
+
+    get:
+      summary: Получение значения по ключу
+      description: >
+        Возвращает JSON объект с полями `key` и `value`. Если ключ не найден,
+        возвращается ошибка 404.
+      responses:
+        '200':
+          description: Успешный ответ с данными
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key:
+                    type: string
+                  value:
+                    type: string
+                required:
+                  - key
+                  - value
+              example:
+                key: "exampleKey"
+                value: "exampleValue"
+        '404':
+          description: Ключ не найден
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+              example:
+                message: "Key not found"
+        '400':
+          description: Ошибка клиента (например, ключ не предоставлен)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+              example:
+                message: "Key not provided"
+
+    put:
+      summary: Обновление или вставка значения по ключу
+      description: >
+        Принимает JSON с полем `value` и обновляет или вставляет запись с заданным ключом.
+        После обновления данные сохраняются в файл.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: string
+                  description: Значение для вставки/обновления
+              required:
+                - value
+            example:
+              value: "newValue"
+      responses:
+        '200':
+          description: Успешное обновление записи
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated_key:
+                    type: string
+                  updated_value:
+                    type: string
+                required:
+                  - updated_key
+                  - updated_value
+              example:
+                updated_key: "exampleKey"
+                updated_value: "newValue"
+        '400':
+          description: Ошибка клиента (например, ключ не предоставлен или некорректный запрос)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+              example:
+                message: "Key not provided"
+
+    delete:
+      summary: Удаление записи по ключу
+      description: >
+        Удаляет запись с заданным ключом. Если ключ не найден, возвращается ошибка 404.
+      responses:
+        '200':
+          description: Запись успешно удалена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted_key:
+                    type: string
+                required:
+                  - deleted_key
+              example:
+                deleted_key: "exampleKey"
+        '404':
+          description: Запись с указанным ключом не найдена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+              example:
+                message: "Key not found"
+        '400':
+          description: Ошибка клиента (например, ключ не предоставлен)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+              example:
+                message: "Key not provided"
