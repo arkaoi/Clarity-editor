@@ -28,9 +28,9 @@ const std::string *Database::select(const std::string &key) {
     return nullptr;
 }
 
-void Database::remove(const std::string &key) {
+bool Database::remove(const std::string& key) {
     if (data.find(key) != data.end()) {
-        data.erase(key);
+        data.erase(key) > 0;
     }
 }
 
