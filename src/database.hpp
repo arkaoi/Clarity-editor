@@ -34,7 +34,7 @@ public:
     explicit Database(const std::string &file);
     void insert(const std::string &key, const std::string &value);
     const std::string *select(const std::string &key);
-    void remove(const std::string &key);
+    bool remove(const std::string &key);
     void saveToFile();
 };
 
