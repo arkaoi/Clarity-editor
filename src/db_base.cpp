@@ -1,37 +1,41 @@
-#include "database.hpp"
+#ifndef DATABASE_HPP_
+#define DATABASE_HPP_
+
+#include <map>
+#include <sstream>
+#include <string>
+#include <vector>
+#include "db_entry.hpp"
+#include "sstable.hpp"
 
 namespace DB {
-Database::Database(const std::string &file) : sstable(file) {
-    std::ifstream in(file);
-    if (in) {
-        std::string key, value;
-        while (in >> key >> value) {
-            data[key] = value;
-        }
-    }
-}
 
-void Database::saveToFile() {
-    sstable.write(data);
-}
+class Database {
+ private:
+  std::map<std::string, DBEntry> memtable;
+  std::vector<SSTable> sstables;
+  size_t memtableLimit;
+  size_t sstableLimit;
+  std::string directory;
 
-void Database::insert(const std::string &key, const std::string &value) {
-    data[key] = value;
-}
+  void flushMemtable();
+  void mergeSSTables();
 
-const std::string *Database::select(const std::string &key) {
-    auto result = data.find(key);
-    if (result != data.end()) {
-        return &result->second;
-    }
+ public:
 
-    return nullptr;
-}
+  Database(const std::string& directory, size_t memLimit, size_t sstLimit);
 
-bool Database::remove(const std::string& key) {
-    if (data.find(key) != data.end()) {
-        data.erase(key) > 0;
-    }
-}
+  void insert(const std::string& key, const std::string& value);
+
+  bool remove(const std::string& key);
+
+  std::optional<std::string> select(const std::string& key);
+
+  void flush();
+
+  void merge();
+};
 
 }  // namespace DB
+
+#endif  // DATABASE_HPP_
