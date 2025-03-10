@@ -26,18 +26,29 @@ components_manager:
     dynamic-config:
       defaults:
         HTTP_CLIENT_CONNECTION_POOL_SIZE: 1000
+      updates-enabled: true
+
+    dynamic-config-client:
+      service-name: my-service
+      http-timeout: 30s
+      http-retries: 3
+
+    dynamic-config-client-updater:
+      first-update-fail-ok: true
+      config-settings: false
+      update-interval: 1s
 
     testsuite-support: {}
 
     http-client:
-      load-enabled: false
+      load-enabled: true
       fs-task-processor: fs-task-processor
 
     dns-client:
       fs-task-processor: fs-task-processor
 
     tests-control:
-      load-enabled: false
+      load-enabled: $testsuite-enabled
       path: /tests/{action}
       method: POST
       task_processor: main-task-processor
@@ -50,8 +61,8 @@ components_manager:
       task_processor: main-task-processor
 
     handler-database:
-      path: /database
-      method: GET,DELETE,PUT,POST
+      path: /database/{key}
+      method: GET,DELETE,PUT
       task_processor: main-task-processor
 
     tracer:

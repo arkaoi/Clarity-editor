@@ -61,3 +61,11 @@ install(TARGETS ${PROJECT_NAME}
 install(FILES ${CONFIGS_FILES}
         DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}/${PROJECT_NAME}
         COMPONENT ${PROJECT_NAME})
+userver_testsuite_add(
+        SERVICE_TARGET ${PROJECT_NAME}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tests
+        PYTEST_ARGS
+        --service-config=${CMAKE_CURRENT_SOURCE_DIR}/configs/config.yaml
+        --service-binary=$<TARGET_FILE:${PROJECT_NAME}>
+        --service-config-vars=${CMAKE_CURRENT_SOURCE_DIR}/configs/config.yaml
+)
