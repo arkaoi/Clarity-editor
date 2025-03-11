@@ -1,7 +1,7 @@
 #include "db_handler.hpp"
 #include <userver/server/handlers/exceptions.hpp>
 
-namespace userver_demo {
+namespace userver_db {
 
     namespace {
         struct error_builder {
@@ -34,7 +34,7 @@ namespace userver_demo {
 
         //404
         if (method == userver::server::http::HttpMethod::kGet) {
-            const std::string* value = db_.select(key);
+            const auto value = db_.select(key);
             if (!value) {
                 throw userver::server::handlers::ResourceNotFound(
                         error_builder{"Key not found"});
@@ -46,7 +46,7 @@ namespace userver_demo {
         } else if (method == userver::server::http::HttpMethod::kPut) {
             std::string value = request_json["value"].As<std::string>("default_value");
             db_.insert(key, value);
-            db_.saveToFile();
+            db_.flush();
             userver::formats::json::ValueBuilder response;
             response["updated_key"] = key;
             response["updated_value"] = value;
@@ -58,7 +58,7 @@ namespace userver_demo {
                 throw userver::server::handlers::ResourceNotFound(
                         error_builder{"Key not found"});
             }
-            db_.saveToFile();
+            db_.flush();
             userver::formats::json::ValueBuilder response;
             response["deleted_key"] = key;
             return response.ExtractValue();
@@ -69,4 +69,4 @@ namespace userver_demo {
         }
     }
 
-}  // namespace userver_demo
+}  // namespace userver_db
