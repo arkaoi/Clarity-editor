@@ -121,7 +121,7 @@ std::map<std::string, std::optional<std::string>> SSTable::dump() const {
         if (tomb == 1) {
             records[key] = std::nullopt;
         } else {
-            records[key] = val;
+            records[key] = value;
         }
     }
     return records;
