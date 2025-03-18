@@ -5,31 +5,36 @@
 #include <map>
 #include <optional>
 #include <string>
-#include "db_entry.hpp"
 
 namespace DB {
 
 class ISSTable {
- public:
-  virtual void write(const std::map<std::string, DBEntry>& data) = 0;
-  virtual bool find(const std::string& key, DBEntry& entry) = 0;
-  virtual std::map<std::string, DBEntry> dump() const = 0;
+public:
+  virtual void
+  write(const std::map<std::string, std::optional<std::string>> &data) = 0;
+  virtual bool find(const std::string &key,
+                    std::optional<std::string> &value) = 0;
+  virtual std::map<std::string, std::optional<std::string>> dump() const = 0;
   virtual ~ISSTable() {}
 };
 
 class SSTable : public ISSTable {
- private:
+private:
   std::string filename;
   std::map<std::string, std::streampos> index;
+  int level;
   void loadIndex();
 
- public:
-  explicit SSTable(const std::string& file);
-  void write(const std::map<std::string, DBEntry>& data) override;
-  bool find(const std::string& key, DBEntry& entry) override;
-  std::map<std::string, DBEntry> dump() const override;
+public:
+  explicit SSTable(const std::string &file, int lvl = 0);
+  void
+  write(const std::map<std::string, std::optional<std::string>> &data) override;
+  bool find(const std::string &key, std::optional<std::string> &value) override;
+  std::map < std::string, std::optional < std::string >>> dump() const override;
+  const std::string &getFilename() const { return filename; }
+  int getLevel() const { return level; }
 };
 
-}  // namespace DB
+} // namespace DB
 
-#endif  // SSTABLE_HPP_
+#endif // SSTABLE_HPP_
