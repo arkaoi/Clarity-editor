@@ -1,41 +1,39 @@
 #ifndef DATABASE_HPP_
 #define DATABASE_HPP_
 
-#include <algorithm>
-#include <fstream>
-#include <iostream>
 #include <map>
+#include <optional>
+#include <sstream>
 #include <string>
 #include <vector>
+#include "sstable.hpp"
 
 namespace DB {
 
-class SSTable {
-private:
-    std::string filename;
-
-    static bool compare_keys(
-        const std::pair<std::string, std::string> &a,
-        const std::pair<std::string, std::string> &b
-    );
-
-public:
-    SSTable(const std::string &file);
-    void write(const std::map<std::string, std::string> &data);
-    const std::string read(const std::string &key);
-};
-
 class Database {
 private:
-    std::map<std::string, std::string> data;
-    SSTable sstable;
+    std::map<std::string, std::optional<std::string>> memtable;
+    std::vector<SSTable> sstables;
+    size_t memtableLimit;
+    size_t sstableLimit;
+    std::string directory;
+
+    void flushMemtable();
+    void compactSSTables();
+    void mergeSSTables();
 
 public:
-    explicit Database(const std::string &file);
+    Database(const std::string &directory, size_t memLimit, size_t sstLimit);
+
     void insert(const std::string &key, const std::string &value);
-    const std::string *select(const std::string &key);
+
     bool remove(const std::string &key);
-    void saveToFile();
+
+    std::optional<std::string> select(const std::string &key);
+
+    void flush();
+
+    void merge();
 };
 
 }  // namespace DB

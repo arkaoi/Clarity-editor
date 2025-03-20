@@ -7,9 +7,9 @@
 #include <userver/server/http/http_request.hpp>
 #include <userver/server/request/request_context.hpp>
 
-#include "db_base.hpp"
+#include "database.hpp"
 
-namespace userver_demo {
+namespace userver_db {
 
 
 class DatabaseHandler final : public userver::server::handlers::HttpHandlerJsonBase {
@@ -24,7 +24,7 @@ class DatabaseHandler final : public userver::server::handlers::HttpHandlerJsonB
       userver::server::request::RequestContext& request_context) const override;
 
  private:
-  mutable DB::Database db_{"database.txt"};
+    mutable DB::Database db_{"./database", 100, 10};
 };
 
 }  // namespace userver_demo

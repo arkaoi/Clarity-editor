@@ -1,74 +1,72 @@
 #include <userver/utest/utest.hpp>
-#include "database.hpp"
-#include <fstream>
+#include <filesystem>
+#include "sstable.hpp"
 
-namespace DB {
+namespace fs = std::filesystem;
+using namespace DB;
 
-    class SSTableTest : public ::testing::Test {
-    protected:
-        void SetUp() override {
-            std::ofstream file("sstable_test.txt");
-            file << "key1 value1\nkey2 value2\nkey3 value3\n";
-            file.close();
-        }
+const std::string kTestFilename = "test_sstable.dat";
 
-        void TearDown() override {
-            std::remove("sstable_test.txt");
-        }
+UTEST(SSTableTest, WriteAndFind) {
+    fs::remove(kTestFilename);
+    SSTable sstable(kTestFilename, 0);
+    std::map<std::string, std::optional<std::string>> data = {
+        {"key1", "value1"},
+        {"key2", "value2"},
+        {"key3", std::nullopt}
     };
+    sstable.write(data);
+    std::optional<std::string> value;
+    
+    EXPECT_TRUE(sstable.find("key1", value));
+    EXPECT_EQ(value, "value1");
 
-    UTEST_F(SSTableTest, ReadExistingKey) {
-        SSTable sstable("sstable_test.txt");
-        EXPECT_EQ(sstable.read("key1"), "value1");
-        EXPECT_EQ(sstable.read("key2"), "value2");
-        EXPECT_EQ(sstable.read("key3"), "value3");
-    }
+    EXPECT_TRUE(sstable.find("key2", value));
+    EXPECT_EQ(value, "value2");
 
-    UTEST_F(SSTableTest, ReadNonExistingKey) {
-        SSTable sstable("sstable_test.txt");
-        EXPECT_EQ(sstable.read("key4"), "");
-    }
+    EXPECT_TRUE(sstable.find("key3", value));
+    EXPECT_FALSE(value.has_value()); 
 
-    UTEST_F(SSTableTest, WriteAndRead) {
-        SSTable sstable("sstable_test.txt");
+    EXPECT_FALSE(sstable.find("unknown", value));
+}
 
-        std::map<std::string, std::string> data = {
-            {"key4", "value4"},
-            {"key5", "value5"},
-            {"key6", "value6"}
+UTEST(SSTableTest, IndexRecovery) {
+    fs::remove(kTestFilename);
+    {
+        SSTable sstable(kTestFilename, 0);
+        std::map<std::string, std::optional<std::string>> data = {
+            {"a", "apple"},
+            {"b", "banana"},
         };
-
         sstable.write(data);
-
-        EXPECT_EQ(sstable.read("key4"), "value4");
-        EXPECT_EQ(sstable.read("key5"), "value5");
-        EXPECT_EQ(sstable.read("key6"), "value6");
     }
+    SSTable sstable(kTestFilename, 0);
+    std::optional<std::string> value;
 
-    UTEST_F(SSTableTest, DataIsSortedAfterWrite) {
-        SSTable sstable("sstable_test.txt");
+    EXPECT_TRUE(sstable.find("a", value));
+    EXPECT_EQ(value, "apple");
 
-        std::map<std::string, std::string> unsorted_data = {
-            {"key3", "value3"},
-            {"key1", "value1"},
-            {"key4", "value4"},
-            {"key2", "value2"}
-        };
+    EXPECT_TRUE(sstable.find("b", value));
+    EXPECT_EQ(value, "banana");
 
-        sstable.write(unsorted_data);
+    EXPECT_FALSE(sstable.find("c", value)); 
+}
 
-        std::ifstream file("sstable_test.txt");
-        std::vector<std::string> lines;
-        std::string line;
-        while (std::getline(file, line)) {
-            lines.push_back(line);
-        }
+UTEST(SSTableTest, DumpTest) {
+    fs::remove(kTestFilename);
 
-        std::vector<std::string> expected = {
-            "key1 value1", "key2 value2", "key3 value3", "key4 value4"
-        };
+    SSTable sstable(kTestFilename, 0);
+    std::map<std::string, std::optional<std::string>> data = {
+        {"x", "xyz"},
+        {"y", std::nullopt},
+        {"z", "zzz"}
+    };
+    sstable.write(data);
 
-        EXPECT_EQ(lines, expected);
-    }
+    auto dumpedData = sstable.dump();
 
-}  // namespace DB
+    EXPECT_EQ(dumpedData["x"], "xyz");
+    EXPECT_EQ(dumpedData["z"], "zzz");
+    EXPECT_FALSE(dumpedData["y"].has_value());
+}
+

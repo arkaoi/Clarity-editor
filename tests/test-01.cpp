@@ -1,59 +1,53 @@
-#include <userver/utest/utest.hpp>
-#include "db_base.hpp"
-#include <fstream>
+#include <gtest/gtest.h>
+#include "database.hpp"
 
-namespace DB {
-
-    class DatabaseTest : public ::testing::Test {
-    protected:
-        void SetUp() override {
-            std::ofstream file("test_db.txt");
-            file << "key1 value1\nkey2 value2\n";
-            file.close();
-        }
-
-        void TearDown() override {
-            std::remove("test_db.txt");
-        }
-    };
-
-    UTEST_F(DatabaseTest, LoadFromFile) {
-        Database db("test_db.txt");
-        EXPECT_NE(db.select("key1"), nullptr);
-        EXPECT_EQ(*db.select("key1"), "value1");
-        EXPECT_NE(db.select("key2"), nullptr);
-        EXPECT_EQ(*db.select("key2"), "value2");
+class DatabaseTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        db = std::make_unique<DB::Database>("test_db", 2, 2);
     }
 
-    UTEST_F(DatabaseTest, InsertAndSelect) {
-        Database db("test_db.txt");
-        db.insert("key3", "value3");
-        EXPECT_NE(db.select("key3"), nullptr);
-        EXPECT_EQ(*db.select("key3"), "value3");
+    void TearDown() override {
+        std::filesystem::remove_all("test_db");
     }
 
-    UTEST_F(DatabaseTest, Remove) {
-        Database db("test_db.txt");
-        db.insert("key4", "value4");
-        db.remove("key4");
-        EXPECT_EQ(db.select("key4"), nullptr);
-    }
+    std::unique_ptr<DB::Database> db;
+};
 
-    UTEST_F(DatabaseTest, SaveToFile) {
-        Database db("test_db.txt");
-        db.insert("key5", "value5");
-        db.saveToFile();
+TEST_F(DatabaseTest, InsertSelectTest) {
+    db->insert("key1", "value1");
+    db->insert("key2", "value2");
 
-        std::ifstream file("test_db.txt");
-        std::string line;
-        bool found = false;
-        while (std::getline(file, line)) {
-            if (line == "key5 value5") {
-                found = true;
-                break;
-            }
-        }
-        EXPECT_TRUE(found);
-    }
+    EXPECT_EQ(db->select("key1"), std::optional<std::string>("value1"));
+    EXPECT_EQ(db->select("key2"), std::optional<std::string>("value2"));
+}
 
-} // namespace DB
+TEST_F(DatabaseTest, RemoveTest) {
+    db->insert("key1", "value1");
+    EXPECT_TRUE(db->remove("key1"));
+    EXPECT_FALSE(db->remove("key1"));
+    EXPECT_EQ(db->select("key1"), std::nullopt);
+}
+
+TEST_F(DatabaseTest, FlushTest) {
+    db->insert("key1", "value1");
+    db->insert("key2", "value2");
+    db->flush();
+    EXPECT_EQ(db->select("key1"), std::optional<std::string>("value1"));
+}
+
+TEST_F(DatabaseTest, MergeTest) {
+    db->insert("key1", "value1");
+    db->insert("key2", "value2");
+    db->flush();
+    
+    db->insert("key3", "value3");
+    db->insert("key4", "value4");
+    db->flush();
+
+    db->merge();
+
+    EXPECT_EQ(db->select("key1"), std::optional<std::string>("value1"));
+    EXPECT_EQ(db->select("key4"), std::optional<std::string>("value4"));
+}
+
