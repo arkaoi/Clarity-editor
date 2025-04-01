@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <filesystem>
 #include "database.hpp"
 
 class DatabaseTest : public ::testing::Test {
