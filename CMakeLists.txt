@@ -38,7 +38,7 @@ add_executable(${PROJECT_NAME}_unittest
      tests/test-01.cpp
 
 )
-add_subdirectory(third_party/userver)
+
 target_link_libraries(${PROJECT_NAME}_unittest PRIVATE ${PROJECT_NAME}_objs userver::utest)
 add_google_tests(${PROJECT_NAME}_unittest)
 
