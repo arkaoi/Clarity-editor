@@ -19,11 +19,13 @@ endif()
 
 userver_setup_environment()
 
+include_directories(${CMAKE_SOURCE_DIR}/src)
 
 add_library(${PROJECT_NAME}_objs OBJECT
-        src/db_base.cpp
-
+    src/db_base.cpp
+    src/sstable.cpp
 )
+
 target_link_libraries(${PROJECT_NAME}_objs PUBLIC userver::core)
 
 
@@ -36,6 +38,7 @@ add_executable(${PROJECT_NAME}_unittest
      tests/test-01.cpp
 
 )
+
 target_link_libraries(${PROJECT_NAME}_unittest PRIVATE ${PROJECT_NAME}_objs userver::utest)
 add_google_tests(${PROJECT_NAME}_unittest)
 

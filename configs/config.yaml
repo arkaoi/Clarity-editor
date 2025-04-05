@@ -24,21 +24,15 @@ components_manager:
           overflow_behavior: discard
 
     dynamic-config:
-      defaults:
-        HTTP_CLIENT_CONNECTION_POOL_SIZE: 1000
-      updates-enabled: true
+      updates-enabled: false
 
     dynamic-config-client:
-      service-name: my-service
-      http-timeout: 30s
-      http-retries: 3
+      load-enabled: false
 
     dynamic-config-client-updater:
-      first-update-fail-ok: true
-      config-settings: false
-      update-interval: 1s
+      load-enabled: false
 
-    testsuite-support: {}
+    testsuite-support: { }
 
     http-client:
       load-enabled: true

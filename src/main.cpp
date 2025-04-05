@@ -22,7 +22,7 @@ int main(int argc, char* argv[]) {
                             .Append<userver::server::handlers::TestsControl>();
 
 
-  component_list.Append<userver_demo::DatabaseHandler>();
+  component_list.Append<userver_db::DatabaseHandler>();
 
   return userver::utils::DaemonMain(argc, argv, component_list);
 }
