@@ -10,6 +10,7 @@
 
 #include "db_entry.hpp"
 #include "sstable.hpp"
+#include "wal.hpp"
 
 namespace DB {
 
@@ -21,9 +22,11 @@ class Database {
   size_t sstableLimit;
   std::string directory;
   mutable userver::engine::Mutex db_mutex;
+  DB::WAL wal_;
 
   void flushMemtable();
   void mergeSSTables();
+  void recoverFromWAL();
 
   std::optional<std::string> selectInternal(const std::string& key);
 
