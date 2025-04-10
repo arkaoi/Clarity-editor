@@ -24,6 +24,7 @@ include_directories(${CMAKE_SOURCE_DIR}/src)
 add_library(${PROJECT_NAME}_objs OBJECT
     src/db_base.cpp
     src/sstable.cpp
+    src/wal.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}_objs PUBLIC userver::core)
