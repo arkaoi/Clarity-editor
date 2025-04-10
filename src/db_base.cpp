@@ -3,14 +3,25 @@
 #include <iostream>
 #include <sstream>
 #include "database.hpp"
+#include "db_config.hpp"
 #include "sstable.hpp"
 
 namespace DB {
 
 Database::Database(const std::string& dir, size_t memLimit, size_t sstLimit)
-    : memtableLimit(memLimit), sstableLimit(sstLimit), directory(dir) {}
+    : memtableLimit(memLimit),
+      sstableLimit(sstLimit),
+      directory(dir),
+      wal_(std::string(DBConfig::kDirectory) + "/wal.log") {
+  recoverFromWAL();
+}
 
 Database::~Database() { flush(); }
+
+void Database::recoverFromWAL() {
+  wal_.recover([this](const std::string& key, const std::string& value,
+                      bool tombstone) { memtable[key] = {value, tombstone}; });
+}
 
 void Database::flushMemtable() {
   static int sstableCounter = 0;
@@ -26,6 +37,7 @@ void Database::flushMemtable() {
   sstables.push_back(sst);
 
   memtable.clear();
+  wal_.clear();
 
   if (sstables.size() > sstableLimit) {
     mergeSSTables();
@@ -90,6 +102,7 @@ std::optional<std::string> Database::selectInternal(const std::string& key) {
 
 void Database::insert(const std::string& key, const std::string& value) {
   std::lock_guard<userver::engine::Mutex> lock(db_mutex);
+  wal_.logInsert(key, value);
   memtable[key] = {value, false};
   if (memtable.size() >= memtableLimit) {
     flushMemtable();
@@ -102,6 +115,7 @@ bool Database::remove(const std::string& key) {
   if (!existing.has_value()) {
     return false;
   }
+  wal_.logRemove(key);
   memtable[key] = {"", true};
   if (memtable.size() >= memtableLimit) {
     flushMemtable();
