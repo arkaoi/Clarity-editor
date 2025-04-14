@@ -5,10 +5,10 @@
 
 namespace DBConfig {
 
-constexpr const char* kDirectory = "database";
+constexpr const char *kDirectory = "database";
 constexpr std::size_t kMemtableLimit = 100;
-constexpr std::size_t kSstableLimit = 8;
+constexpr std::size_t kSstableLimit = 2;
 
-}  // namespace DBConfig
+} // namespace DBConfig
 
-#endif  // DB_CONFIG_HPP_
+#endif // DB_CONFIG_HPP_
