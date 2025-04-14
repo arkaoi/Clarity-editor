@@ -9,12 +9,12 @@ struct error_builder {
   std::string message;
   std::string GetExternalBody() const { return message; }
 };
-}  // namespace
+} // namespace
 
 userver::formats::json::Value DatabaseHandler::HandleRequestJsonThrow(
-    const userver::server::http::HttpRequest& request,
-    const userver::formats::json::Value& request_json,
-    userver::server::request::RequestContext&) const {
+    const userver::server::http::HttpRequest &request,
+    const userver::formats::json::Value &request_json,
+    userver::server::request::RequestContext &) const {
   const auto method = request.GetMethod();
 
   std::string url = request.GetUrl();
@@ -65,4 +65,4 @@ userver::formats::json::Value DatabaseHandler::HandleRequestJsonThrow(
   }
 }
 
-}  // namespace userver_db
+} // namespace userver_db

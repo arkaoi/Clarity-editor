@@ -10,6 +10,6 @@ struct DBEntry {
   bool tombstone = false;
 };
 
-}  // namespace DB
+} // namespace DB
 
-#endif  // DB_ENTRY_HPP_
+#endif // DB_ENTRY_HPP_

@@ -14,19 +14,19 @@ namespace userver_db {
 
 class DatabaseHandler final
     : public userver::server::handlers::HttpHandlerJsonBase {
- public:
+public:
   static constexpr std::string_view kName = "handler-database";
 
   using HttpHandlerJsonBase::HttpHandlerJsonBase;
 
   userver::formats::json::Value HandleRequestJsonThrow(
-      const userver::server::http::HttpRequest& request,
-      const userver::formats::json::Value& request_json,
-      userver::server::request::RequestContext& request_context) const override;
+      const userver::server::http::HttpRequest &request,
+      const userver::formats::json::Value &request_json,
+      userver::server::request::RequestContext &request_context) const override;
 
- private:
+private:
   mutable DB::Database db_{DBConfig::kDirectory, DBConfig::kMemtableLimit,
                            DBConfig::kSstableLimit};
 };
 
-}  // namespace userver_db
+} // namespace userver_db

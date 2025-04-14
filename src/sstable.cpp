@@ -5,11 +5,12 @@
 
 namespace DB {
 
-SSTable::SSTable(const std::string& file) : filename(file) { loadIndex(); }
+SSTable::SSTable(const std::string &file) : filename(file) { loadIndex(); }
 
 void SSTable::loadIndex() {
   std::ifstream in(filename, std::ios::binary);
-  if (!in) return;
+  if (!in)
+    return;
 
   std::string line;
   while (std::getline(in, line)) {
@@ -17,7 +18,8 @@ void SSTable::loadIndex() {
       break;
     }
   }
-  if (in.eof()) return;
+  if (in.eof())
+    return;
 
   size_t count = 0;
   in >> count;
@@ -29,7 +31,7 @@ void SSTable::loadIndex() {
   }
 }
 
-void SSTable::write(const std::map<std::string, DBEntry>& data) {
+void SSTable::write(const std::map<std::string, DBEntry> &data) {
   std::ofstream out(filename, std::ios::binary | std::ios::trunc);
   if (!out) {
     std::cerr << "Failed to open file: " << filename << "\n";
@@ -37,7 +39,7 @@ void SSTable::write(const std::map<std::string, DBEntry>& data) {
   }
 
   std::map<std::string, std::streampos> newIndex;
-  for (const auto& pair : data) {
+  for (const auto &pair : data) {
     std::streampos pos = out.tellp();
     newIndex[pair.first] = pos;
     out << pair.first << " " << std::quoted(pair.second.value) << " "
@@ -46,28 +48,33 @@ void SSTable::write(const std::map<std::string, DBEntry>& data) {
 
   out << "##INDEX##\n";
   out << newIndex.size() << "\n";
-  for (const auto& entry : newIndex) {
+  for (const auto &entry : newIndex) {
     out << entry.first << " " << entry.second << "\n";
   }
 
   index = newIndex;
 }
 
-bool SSTable::find(const std::string& key, DBEntry& entry) {
+bool SSTable::find(const std::string &key, DBEntry &entry) {
   auto it = index.find(key);
-  if (it == index.end()) return false;
+  if (it == index.end())
+    return false;
 
   std::ifstream in(filename, std::ios::binary);
-  if (!in) return false;
+  if (!in)
+    return false;
 
   in.seekg(it->second);
-  if (!in) return false;
+  if (!in)
+    return false;
 
   std::string fileKey;
   std::string fileValue;
   int tomb;
-  if (!(in >> fileKey >> std::quoted(fileValue) >> tomb)) return false;
-  if (fileKey != key) return false;
+  if (!(in >> fileKey >> std::quoted(fileValue) >> tomb))
+    return false;
+  if (fileKey != key)
+    return false;
   entry.value = fileValue;
   entry.tombstone = (tomb == 1);
   return true;
@@ -76,19 +83,22 @@ bool SSTable::find(const std::string& key, DBEntry& entry) {
 std::map<std::string, DBEntry> SSTable::dump() const {
   std::map<std::string, DBEntry> records;
   std::ifstream in(filename, std::ios::binary);
-  if (!in) return records;
+  if (!in)
+    return records;
 
   std::string line;
   while (std::getline(in, line)) {
-    if (line == "##INDEX##") break;
+    if (line == "##INDEX##")
+      break;
     std::istringstream iss(line);
     std::string key;
     std::string value;
     int tomb;
-    if (!(iss >> key >> std::quoted(value) >> tomb)) continue;
+    if (!(iss >> key >> std::quoted(value) >> tomb))
+      continue;
     records[key] = {value, tomb == 1};
   }
   return records;
 }
 
-}  // namespace DB
+} // namespace DB
