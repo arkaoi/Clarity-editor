@@ -15,30 +15,35 @@
 namespace DB {
 
 class Database {
- private:
-  std::map<std::string, DBEntry> memtable;
-  std::vector<SSTable> sstables;
-  size_t memtableLimit;
-  size_t sstableLimit;
-  std::string directory;
-  mutable userver::engine::Mutex db_mutex;
-  DB::WAL wal_;
+private:
+    std::map<std::string, DBEntry> memtable;
+    std::vector<SSTable> sstables;
 
-  void flushMemtable();
-  void mergeSSTables();
-  void recoverFromWAL();
+    size_t memtableLimit = 1;
+    size_t sstableLimit = 1;
 
-  std::optional<std::string> selectInternal(const std::string& key);
+    std::string directory;
+    DB::WAL wal_;
 
- public:
-  Database(const std::string& directory, size_t memLimit, size_t sstLimit);
-  ~Database();
+    mutable userver::engine::Mutex db_mutex;
 
-  void insert(const std::string& key, const std::string& value);
-  bool remove(const std::string& key);
-  std::optional<std::string> select(const std::string& key);
-  void flush();
-  void merge();
+    void flushMemtable();
+    void mergeSSTables();
+    void recoverFromWAL();
+
+    std::optional<std::string> selectInternal(const std::string &key);
+
+public:
+    Database(const std::string &directory, size_t memLimit, size_t sstLimit);
+    ~Database();
+
+    void insert(const std::string &key, const std::string &value);
+    bool remove(const std::string &key);
+
+    std::optional<std::string> select(const std::string &key);
+
+    void flush();
+    void merge();
 };
 
 }  // namespace DB
