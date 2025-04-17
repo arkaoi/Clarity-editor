@@ -51,9 +51,12 @@ void Database::flushMemtable() {
   memtable.clear();
   wal_.clear();
 
-  if (sstables.size() > sstableLimit) {
-    mergeSSTables();
-  }
+  if (sstables.size() > sstableLimit && !mergeInProgress.exchange(true)) {
+    userver::engine::AsyncNoSpan([this]() {
+        mergeSSTables();
+        mergeInProgress = false;
+    }).Detach();
+}
 }
 
 void Database::mergeSSTables() {

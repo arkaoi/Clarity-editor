@@ -6,7 +6,9 @@
 #include <sstream>
 #include <string>
 #include <userver/engine/mutex.hpp>
+#include <userver/engine/async.hpp>
 #include <vector>
+#include <atomic>
 
 #include "db_entry.hpp"
 #include "sstable.hpp"
@@ -30,7 +32,7 @@ private:
   void loadSSTables();
 
   std::optional<std::string> selectInternal(const std::string &key);
-
+  std::atomic<bool> mergeInProgress = false;
 public:
   Database(const std::string &directory, size_t memLimit, size_t sstLimit);
   ~Database();
