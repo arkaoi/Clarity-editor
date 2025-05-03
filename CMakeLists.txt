@@ -4,7 +4,6 @@ project(service_template CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(DownloadUserver)
 
@@ -15,16 +14,30 @@ endif()
 
 userver_setup_environment()
 
+include_directories(${CMAKE_SOURCE_DIR}/src)
+
+find_package(Boost REQUIRED COMPONENTS iostreams)
+if(NOT Boost_FOUND)
+  message(FATAL_ERROR "Boost not found")
+endif()
+
 add_library(${PROJECT_NAME}_objs OBJECT
-        src/db_base.cpp
+    src/db_base.cpp
+    src/sstable.cpp
+    src/wal.cpp
 )
-target_link_libraries(${PROJECT_NAME}_objs PUBLIC userver::core)
+
+target_link_libraries(${PROJECT_NAME}_objs PUBLIC userver::core Boost::iostreams)
 
 add_executable(${PROJECT_NAME} src/main.cpp
-        src/db_handler.cpp
-        src/sstable.cpp
-        src/wal.cpp)
+        src/db_handler.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_objs)
+
+add_executable(${PROJECT_NAME}_unittest
+     tests/test-01.cpp
+)
+target_link_libraries(${PROJECT_NAME}_unittest PRIVATE ${PROJECT_NAME}_objs userver::utest)
+add_google_tests(${PROJECT_NAME}_unittest)
 
 include(GNUInstallDirs)
 
@@ -46,20 +59,6 @@ install(TARGETS ${PROJECT_NAME}
 install(FILES ${CONFIGS_FILES}
         DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}/${PROJECT_NAME}
         COMPONENT ${PROJECT_NAME})
-
-
-enable_testing()
-
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/venv/bin/pytest")
-  set(PYTEST_EXECUTABLE "${CMAKE_CURRENT_SOURCE_DIR}/venv/bin/pytest" CACHE STRING "Path to pytest in venv" FORCE)
-else()
-  find_program(PYTEST_EXECUTABLE NAMES pytest)
-endif()
-
-if(PYTEST_EXECUTABLE)
-  add_test(NAME RunPythonTests
-          COMMAND ${PYTEST_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests)
-endif()
 
 userver_testsuite_add(
         SERVICE_TARGET ${PROJECT_NAME}
