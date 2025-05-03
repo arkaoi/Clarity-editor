@@ -1,134 +1,108 @@
-#include <boost/iostreams/device/file_descriptor.hpp>
-#include <boost/iostreams/stream.hpp>
-#include <fcntl.h>
-#include <iomanip>
-#include <iostream>
-#include <sstream>
-#include <unistd.h>
-
 #include "sstable.hpp"
+
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
 
 namespace DB {
 
-using boost_file_source =
-    boost::iostreams::stream<boost::iostreams::file_descriptor_source>;
-using boost_file_sink =
-    boost::iostreams::stream<boost::iostreams::file_descriptor_sink>;
-
 SSTable::SSTable(const std::string &file) : filename(file) {
+  if (std::filesystem::exists(filename) &&
+      std::filesystem::file_size(filename) > 0) {
     loadIndex();
+  }
 }
 
 void SSTable::loadIndex() {
-    int fd = ::open(filename.c_str(), O_RDONLY);
-    if (fd < 0) {
-        return;
-    }
-    boost_file_source in(fd, boost::iostreams::close_handle);
+  std::lock_guard<std::mutex> lock(indexMutex);
+  index.clear();
 
-    std::string line;
-    while (std::getline(in, line)) {
-        if (line == "##INDEX##") {
-            break;
-        }
-    }
-    if (in.eof()) {
-        return;
-    }
+  std::ifstream in(filename, std::ios::binary);
+  if (!in) {
+    throw std::runtime_error("Cannot open SSTable for index load: " + filename);
+  }
 
-    size_t count = 0;
-    in >> count;
-    for (size_t i = 0; i < count; ++i) {
-        std::string key;
-        long long offset;
-        in >> key >> offset;
-        index[key] = static_cast<std::streampos>(offset);
-    }
+  std::string line;
+  while (std::getline(in, line) && line != "##INDEX##") {
+  }
+  if (in.eof())
+    return;
+
+  size_t count = 0;
+  in >> count;
+  for (size_t i = 0; i < count; ++i) {
+    std::string key;
+    long long off_ll;
+    in >> key >> off_ll;
+    index[key] = static_cast<std::streampos>(off_ll);
+  }
 }
 
 void SSTable::write(const std::map<std::string, DBEntry> &data) {
-    int fd = ::open(filename.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (fd < 0) {
-        std::cerr << "Failed to open file: " << filename << "\n";
-        return;
-    }
-    boost_file_sink out(fd, boost::iostreams::close_handle);
+  std::ofstream out(filename, std::ios::binary | std::ios::trunc);
+  if (!out) {
+    throw std::runtime_error("Cannot open SSTable for write: " + filename);
+  }
 
-    std::map<std::string, std::streampos> newIndex;
-    for (const auto &pair : data) {
-        std::streampos pos = out.tellp();
-        newIndex[pair.first] = pos;
-        out << pair.first << " " << std::quoted(pair.second.value) << " "
-            << (pair.second.tombstone ? "1" : "0") << "\n";
-    }
+  std::map<std::string, std::streampos> newIndex;
+  for (const auto &p : data) {
+    std::streampos pos = out.tellp();
+    newIndex[p.first] = pos;
+    out << p.first << " " << std::quoted(p.second.value) << " "
+        << (p.second.tombstone ? "1" : "0") << "\n";
+  }
+  out << "##INDEX##\n";
+  out << newIndex.size() << "\n";
+  for (const auto &e : newIndex) {
+    out << e.first << " " << static_cast<long long>(e.second) << "\n";
+  }
+  out.flush();
+  out.close();
 
-    out << "##INDEX##\n";
-    out << newIndex.size() << "\n";
-    for (const auto &entry : newIndex) {
-        out << entry.first << " " << entry.second << "\n";
-    }
-    index = newIndex;
+  {
+    std::lock_guard<std::mutex> lock(indexMutex);
+    index = std::move(newIndex);
+  }
 }
 
 bool SSTable::find(const std::string &key, DBEntry &entry) {
-    auto it = index.find(key);
-    if (it == index.end()) {
-        return false;
-    }
+  std::lock_guard<std::mutex> lock(indexMutex);
+  auto it = index.find(key);
+  if (it == index.end())
+    return false;
 
-    int fd = ::open(filename.c_str(), O_RDONLY);
-    if (fd < 0) {
-        return false;
-    }
-    
-    boost_file_source in(fd, boost::iostreams::close_handle);
-    in.seekg(it->second);
-    if (!in) {
-        return false;
-    }
-
-    std::string fileKey;
-    std::string fileValue;
-    int tomb;
-    if (!(in >> fileKey >> std::quoted(fileValue) >> tomb)){
-        return false;
-    }
-    if (fileKey != key) {
-        return false;
-    }
-
-    entry.value = fileValue;
-    entry.tombstone = (tomb == 1);
-
-    return true;
+  std::ifstream in(filename, std::ios::binary);
+  if (!in)
+    return false;
+  in.seekg(it->second);
+  std::string fileKey, fileValue;
+  int tomb;
+  if (!(in >> fileKey >> std::quoted(fileValue) >> tomb))
+    return false;
+  if (fileKey != key)
+    return false;
+  entry.value = fileValue;
+  entry.tombstone = (tomb == 1);
+  return true;
 }
 
 std::map<std::string, DBEntry> SSTable::dump() const {
-    std::map<std::string, DBEntry> records;
-    int fd = ::open(filename.c_str(), O_RDONLY);
-    if (fd < 0) {
-        return records;
+  std::map<std::string, DBEntry> outMap;
+  std::ifstream in(filename, std::ios::binary);
+  if (!in)
+    return outMap;
+
+  std::string line;
+  while (std::getline(in, line) && line != "##INDEX##") {
+    std::istringstream iss(line);
+    std::string key, val;
+    int tomb;
+    if (iss >> key >> std::quoted(val) >> tomb) {
+      outMap[key] = {val, tomb == 1};
     }
-    boost_file_source in(fd, boost::iostreams::close_handle);
-
-    std::string line;
-    while (std::getline(in, line)) {
-        if (line == "##INDEX##") {
-            break;
-        }
-
-        std::istringstream iss(line);
-        std::string key;
-        std::string value;
-        int tomb;
-
-        if (!(iss >> key >> std::quoted(value) >> tomb)) {
-            continue;
-        }
-        records[key] = {value, tomb == 1};
-    }
-    
-    return records;
+  }
+  return outMap;
 }
 
-}  // namespace DB
+} // namespace DB

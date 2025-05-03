@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.12...3.31)
-project(service_template CXX)
+project(clarity CXX)
+
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -34,7 +35,7 @@ add_executable(${PROJECT_NAME} src/main.cpp
 target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_objs)
 
 add_executable(${PROJECT_NAME}_unittest
-     tests/test-01.cpp
+
 )
 target_link_libraries(${PROJECT_NAME}_unittest PRIVATE ${PROJECT_NAME}_objs userver::utest)
 add_google_tests(${PROJECT_NAME}_unittest)
