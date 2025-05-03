@@ -11,26 +11,28 @@
 namespace DB {
 using boost_file_sink =
     boost::iostreams::stream<boost::iostreams::file_descriptor_sink>;
+
 class WAL {
 public:
-  WAL(const std::string &filename);
-  ~WAL();
+    WAL(const std::string &filename);
+    ~WAL();
 
-  void logInsert(const std::string &key, const std::string &value);
-  void logRemove(const std::string &key);
+    void logInsert(const std::string &key, const std::string &value);
+    void logRemove(const std::string &key);
 
-  void
-  recover(std::function<void(const std::string &, const std::string &, bool)>
-              applyOperation);
+    void recover(
+        std::function<void(const std::string &, const std::string &, bool)>
+            applyOperation
+    );
 
-  void clear();
+    void clear();
 
 private:
-  std::string filename_;
-  int fd_out_;
-  userver::engine::Mutex walMutex_;
-  std::unique_ptr<boost_file_sink> out_;
+    std::string filename_;
+    int fd_out_;
+    userver::engine::Mutex walMutex_;
+    std::unique_ptr<boost_file_sink> out_;
 };
-} // namespace DB
+}  // namespace DB
 
-#endif // WAL_HPP_
+#endif  // WAL_HPP_
