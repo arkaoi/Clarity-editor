@@ -6,10 +6,10 @@
 namespace DB {
 
 struct DBEntry {
-  std::string value;
-  bool tombstone = false;
+    std::string value;
+    bool tombstone = false;
 };
 
-} // namespace DB
+}  // namespace DB
 
-#endif // DB_ENTRY_HPP_
+#endif  // DB_ENTRY_HPP_
