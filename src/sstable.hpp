@@ -1,6 +1,7 @@
 #ifndef SSTABLE_HPP_
 #define SSTABLE_HPP_
 
+#include "bloom.hpp"
 #include "db_entry.hpp"
 #include <map>
 #include <mutex>
@@ -22,6 +23,7 @@ private:
   std::string filename;
   mutable std::mutex indexMutex;
   std::map<std::string, std::streampos> index;
+  BloomFilter bf_;
 
   void loadIndex();
 

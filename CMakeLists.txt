@@ -2,6 +2,19 @@ cmake_minimum_required(VERSION 3.12...3.31)
 project(clarity CXX)
 
 
+set(ICU_ROOT "/opt/homebrew/opt/icu4c@77" CACHE PATH "Path to ICU root")
+set(ICU_INCLUDE_DIR "${ICU_ROOT}/include" CACHE PATH "Path to ICU include directory")
+set(ICU_LIBRARY_DIR "${ICU_ROOT}/lib" CACHE PATH "Path to ICU library directory")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I/opt/homebrew/opt/icu4c@77/include")
+include_directories(${ICU_INCLUDE_DIR})
+link_directories(${ICU_LIBRARY_DIR})
+
+
+
+
+
+
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -26,6 +39,7 @@ add_library(${PROJECT_NAME}_objs OBJECT
     src/db_base.cpp
     src/sstable.cpp
     src/wal.cpp
+    src/bloom.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}_objs PUBLIC userver::core Boost::iostreams)
