@@ -1,11 +1,11 @@
 #include "sstable.hpp"
+
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
 
 namespace DB {
-
 SSTable::SSTable(const std::string &file) : filename(file) {
     if (std::filesystem::exists(filename) &&
         std::filesystem::file_size(filename) > 0) {
@@ -15,8 +15,8 @@ SSTable::SSTable(const std::string &file) : filename(file) {
 
 void SSTable::loadIndex() {
     std::lock_guard<std::mutex> lock(indexMutex);
-    index.clear();
 
+    index.clear();
     std::ifstream in(filename, std::ios::binary);
     if (!in) {
         throw std::runtime_error(
@@ -24,23 +24,17 @@ void SSTable::loadIndex() {
         );
     }
 
-
-  std::string line;
-  while (std::getline(in, line) && line != "##BLOOM##") {
-  }
-  if (!in.eof()) {
-    bf_.deserialize(in);
-  }
-  while (std::getline(in, line) && line != "##INDEX##") {
-  }
-  if (in.eof())
-    return;
-
     std::string line;
+    while (std::getline(in, line) && line != "##BLOOM##") {
+    }
+    if (!in.eof()) {
+        bf_.deserialize(in);
+    }
     while (std::getline(in, line) && line != "##INDEX##") {
     }
-    if (in.eof())
+    if (in.eof()) {
         return;
+    }
 
     size_t count = 0;
     in >> count;
@@ -52,68 +46,83 @@ void SSTable::loadIndex() {
     }
 }
 
-void SSTable::write(const std::map<std::string, DBEntry> &data) {
+void SSTable::write(SkipListMap<std::string, DBEntry> &data) {
     std::ofstream out(filename, std::ios::binary | std::ios::trunc);
     if (!out) {
         throw std::runtime_error("Cannot open SSTable for write: " + filename);
     }
 
+    bf_ = BloomFilter(data.size() * 10, 7);
+    std::map<std::string, std::streampos> newIndex;
 
-  bf_ = BloomFilter(data.size() * 10, 7);
-  std::map<std::string, std::streampos> newIndex;
-  for (const auto &p : data) {
-    bf_.add(p.first);
-    std::streampos pos = out.tellp();
-    newIndex[p.first] = pos;
-    out << p.first << " " << std::quoted(p.second.value) << " "
-        << (p.second.tombstone ? "1" : "0") << "\n";
-  }
-  out << "##BLOOM##\n";
-  bf_.serialize(out);
-  out << "##INDEX##\n";
-  out << newIndex.size() << "\n";
-  for (const auto &e : newIndex) {
-    out << e.first << " " << static_cast<long long>(e.second) << "\n";
-  }
-  out.flush();
-  out.close();
+    for (auto it = data.begin(); it != data.end(); ++it) {
+        const auto &kv = *it;
+        bf_.add(kv.first);
+        std::streampos pos = out.tellp();
+        newIndex[kv.first] = pos;
+        out << kv.first << " " << std::quoted(kv.second.value) << " "
+            << (kv.second.tombstone ? "1" : "0") << "\n";
+    }
 
-   {
-       std::lock_guard<std::mutex> lock(indexMutex);
-       index = std::move(newIndex);
-   }
+    out << "##BLOOM##\n";
+    bf_.serialize(out);
+
+    out << "##INDEX##\n";
+    out << newIndex.size() << "\n";
+    for (const auto &e : newIndex) {
+        out << e.first << " " << static_cast<long long>(e.second) << "\n";
+    }
+
+    out.flush();
+    out.close();
+
+    {
+        std::lock_guard<std::mutex> lock(indexMutex);
+        index = std::move(newIndex);
+    }
 }
 
 bool SSTable::find(const std::string &key, DBEntry &entry) {
+    std::lock_guard<std::mutex> lock(indexMutex);
 
-  std::lock_guard<std::mutex> lock(indexMutex);
-  if (!bf_.possiblyContains(key))
-    return false;
-  auto it = index.find(key);
-  if (it == index.end())
-    return false;
-
-    
-    std::ifstream in(filename, std::ios::binary);
-    if (!in)
+    if (!bf_.possiblyContains(key)) {
         return false;
+    }
+
+    auto it = index.find(key);
+    if (it == index.end()) {
+        return false;
+    }
+
+    std::ifstream in(filename, std::ios::binary);
+    if (!in) {
+        return false;
+    }
+
     in.seekg(it->second);
+
     std::string fileKey, fileValue;
     int tomb;
-    if (!(in >> fileKey >> std::quoted(fileValue) >> tomb))
+    if (!(in >> fileKey >> std::quoted(fileValue) >> tomb)) {
         return false;
-    if (fileKey != key)
+    }
+    if (fileKey != key) {
         return false;
+    }
+
     entry.value = fileValue;
     entry.tombstone = (tomb == 1);
+
     return true;
 }
 
 std::map<std::string, DBEntry> SSTable::dump() const {
     std::map<std::string, DBEntry> outMap;
     std::ifstream in(filename, std::ios::binary);
-    if (!in)
+
+    if (!in) {
         return outMap;
+    }
 
     std::string line;
     while (std::getline(in, line) && line != "##INDEX##") {
@@ -124,7 +133,7 @@ std::map<std::string, DBEntry> SSTable::dump() const {
             outMap[key] = {val, tomb == 1};
         }
     }
+
     return outMap;
 }
-
 }  // namespace DB

@@ -1,20 +1,18 @@
 #ifndef SSTABLE_HPP_
 #define SSTABLE_HPP_
 
-
 #include "bloom.hpp"
+#include "db_entry.hpp"
+#include "skiplist.hpp"
 
 #include <map>
 #include <mutex>
 #include <optional>
-#include <string>
-#include "db_entry.hpp"
 
 namespace DB {
-
 class ISSTable {
 public:
-    virtual void write(const std::map<std::string, DBEntry> &data) = 0;
+    virtual void write(SkipListMap<std::string, DBEntry> &data) = 0;
     virtual bool find(const std::string &key, DBEntry &entry) = 0;
     virtual std::map<std::string, DBEntry> dump() const = 0;
 
@@ -24,18 +22,15 @@ public:
 
 class SSTable : public ISSTable {
 private:
-
-  std::string filename;
-  mutable std::mutex indexMutex;
-  std::map<std::string, std::streampos> index;
-  BloomFilter bf_;
-
-
-  void loadIndex();
+    std::string filename;
+    mutable std::mutex indexMutex;
+    std::map<std::string, std::streampos> index;
+    BloomFilter bf_;
+    void loadIndex();
 
 public:
     explicit SSTable(const std::string &file);
-    void write(const std::map<std::string, DBEntry> &data) override;
+    void write(SkipListMap<std::string, DBEntry> &data) override;
     bool find(const std::string &key, DBEntry &entry) override;
     std::map<std::string, DBEntry> dump() const override;
 
