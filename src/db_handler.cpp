@@ -66,6 +66,19 @@ userver::formats::json::Value DatabaseHandler::
         throw userver::server::handlers::ClientError(error_builder{
             "Unsupported HTTP method"});
     }
+     if (method == userver::server::http::HttpMethod::kPost) {
+        if (url == "/database/snapshot") {
+            db_.snapshot();
+            userver::formats::json::ValueBuilder response;
+            response["status"] = "snapshot saved";
+            return response.ExtractValue();
+        } else if (url == "/database/load_snapshot") {
+            db_.load_snapshot();
+            userver::formats::json::ValueBuilder response;
+            response["status"] = "snapshot loaded";
+            return response.ExtractValue();
+        }
+    }
 }
 
 }  // namespace userver_db

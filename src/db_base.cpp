@@ -24,6 +24,7 @@ Database::Database(const std::string &dir, size_t memLimit, size_t sstLimit)
     std::filesystem::create_directories(directory);
     recoverFromWAL();
     loadSSTables();
+    load_snapshot();
 }
 
 Database::~Database() {
@@ -226,6 +227,42 @@ void Database::merge() {
         userver::engine::CriticalAsyncNoSpan([this] { mergeWorker(); }
         ).Detach();
     }
+}
+void Database::snapshot() {
+    std::lock_guard<userver::engine::Mutex> lock(db_mutex);
+    std::map<std::string, DBEntry>allData;
+    for (auto& [key, value] : memtable) {
+        allData[key] = value;
+    }
+    if (flushBuffer) {
+        for (auto& [key, value] : *flushBuffer) {
+            allData[key] = value;
+        }
+    }
+    for (auto it = sstables.rbegin(); it != sstables.rend(); ++it) {
+        for (auto& [k, v] : (*it)->dump()) {
+            if (allData.count(k) == 0)
+                allData[k] = v;
+        }
+    }
+    for (auto it = allData.begin(); it != allData.end();) {
+        if (it->second.tombstone) {
+            it = allData.erase(it);
+        }
+        else {
+            ++it;
+        }
+    }
+    std::filesystem::create_directories("data");
+    SSTable snapshotTable("data/snapshot.dat");
+    snapshotTable.write(allData);
+}
+void Database::load_snapshot() {
+    const std::string path = "data/snapshot.dat";
+    if (!std::filesystem::exists(path)) return;
+
+    std::shared_ptr<SSTable> snapshot = std::make_shared<SSTable>(path);
+    sstables.push_back(snapshot);
 }
 
 }  // namespace DB

@@ -47,6 +47,8 @@ public:
     std::optional<std::string> select(const std::string &key);
     void flush();
     void merge();
+    void snapshot();
+    void load_snapshot();
 };
 
 }  // namespace DB
