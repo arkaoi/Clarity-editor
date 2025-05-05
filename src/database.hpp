@@ -1,27 +1,23 @@
 #ifndef DATABASE_HPP_
 #define DATABASE_HPP_
 
-#include <atomic>
-#include <filesystem>
-#include <map>
-#include <memory>
-#include <optional>
-#include <sstream>
-#include <string>
-#include <userver/engine/async.hpp>
-#include <userver/engine/mutex.hpp>
-#include <vector>
 #include "db_entry.hpp"
+#include "skiplist.hpp"
 #include "sstable.hpp"
 #include "wal.hpp"
 
-namespace DB {
+#include <atomic>
+#include <memory>
+#include <sstream>
+#include <userver/engine/async.hpp>
+#include <vector>
 
+namespace DB {
 class Database {
 private:
-    std::map<std::string, DBEntry> memtable;
+    SkipListMap<std::string, DBEntry> memtable;
     std::vector<std::shared_ptr<SSTable>> sstables;
-    std::optional<std::map<std::string, DBEntry>> flushBuffer;
+    std::unique_ptr<SkipListMap<std::string, DBEntry>> flushBuffer;
 
     size_t memtableLimit;
     size_t sstableLimit;
