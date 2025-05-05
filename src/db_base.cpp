@@ -1,21 +1,15 @@
-#include <atomic>
+#include "database.hpp"
+
 #include <chrono>
 #include <ctime>
-#include <filesystem>
 #include <iostream>
-#include <sstream>
-#include <userver/engine/async.hpp>
-#include <userver/engine/mutex.hpp>
 #include <userver/engine/task/cancel.hpp>
-#include "database.hpp"
-#include "sstable.hpp"
 
 namespace {
 static std::atomic<size_t> sstableCounter{0};
 }
 
 namespace DB {
-
 Database::Database(const std::string &dir, size_t memLimit, size_t sstLimit)
     : memtableLimit(memLimit),
       sstableLimit(sstLimit),
@@ -28,8 +22,9 @@ Database::Database(const std::string &dir, size_t memLimit, size_t sstLimit)
 
 Database::~Database() {
     std::lock_guard<userver::engine::Mutex> lock(db_mutex);
-    if (!memtable.empty())
+    if (!memtable.empty()) {
         flushMemtable();
+    }
 }
 
 void Database::recoverFromWAL() {
@@ -38,15 +33,15 @@ void Database::recoverFromWAL() {
                      bool tombstone
                  ) {
         std::lock_guard<userver::engine::Mutex> lock(db_mutex);
-        memtable[key] = {value, tombstone};
+        memtable.insert(key, {value, tombstone});
     });
 }
 
 void Database::loadSSTables() {
     namespace fs = std::filesystem;
-    if (!fs::exists(directory))
+    if (!fs::exists(directory)) {
         return;
-
+    }
     size_t maxId = 0;
     bool hasFiles = false;
     for (auto &entry : fs::directory_iterator(directory)) {
@@ -55,6 +50,7 @@ void Database::loadSSTables() {
             path.find("sstable_") != std::string::npos) {
             sstables.push_back(std::make_shared<SSTable>(path));
             auto filename = entry.path().filename().string();
+
             auto p1 = filename.find("sstable_");
             auto p2 = filename.rfind(".dat");
             if (p1 != std::string::npos && p2 != std::string::npos &&
@@ -75,27 +71,34 @@ void Database::loadSSTables() {
 }
 
 void Database::flushMemtable() {
-    std::map<std::string, DBEntry> toFlush;
+    auto toFlush = std::make_unique<SkipListMap<std::string, DBEntry>>();
     {
         std::lock_guard<userver::engine::Mutex> lock(db_mutex);
-        toFlush = std::move(memtable);
+
+        for (auto it = memtable.begin(); it != memtable.end(); ++it) {
+            const auto &kv = *it;
+            toFlush->insert(kv.first, kv.second);
+        }
+
         memtable.clear();
         wal_.clear();
-        flushBuffer = toFlush;
-    }
 
+        flushBuffer = std::move(toFlush);
+    }
     std::filesystem::create_directories(directory);
+
     size_t id = sstableCounter++;
     const std::string path =
         directory + "/sstable_" + std::to_string(id) + ".dat";
 
     {
         SSTable writer(path);
-        writer.write(toFlush);
+        writer.write(*flushBuffer);
     }
 
     {
         std::lock_guard<userver::engine::Mutex> lock(db_mutex);
+
         sstables.push_back(std::make_shared<SSTable>(path));
         flushBuffer.reset();
         if (sstables.size() > sstableLimit && !mergeInProgress.exchange(true)) {
@@ -107,42 +110,46 @@ void Database::flushMemtable() {
 
 void Database::mergeWorker() {
     userver::engine::current_task::CancellationPoint();
-
     std::vector<std::shared_ptr<SSTable>> batch;
+
     {
         std::lock_guard<userver::engine::Mutex> lock(db_mutex);
         batch = sstables;
     }
 
-    std::map<std::string, DBEntry> merged;
+    SkipListMap<std::string, DBEntry> merged;
     std::vector<std::string> oldFiles;
-
     for (auto &sst : batch) {
         userver::engine::current_task::CancellationPoint();
-        for (auto &p : sst->dump()) {
-            merged[p.first] = p.second;
+        auto dump = sst->dump();
+        for (auto &p : dump) {
+            merged.insert(p.first, p.second);
         }
         oldFiles.push_back(sst->getFilename());
     }
 
-    for (auto it = merged.begin(); it != merged.end();) {
-        if (it->second.tombstone)
-            it = merged.erase(it);
-        else
-            ++it;
+    std::vector<std::string> keysToRemove;
+    for (auto it = merged.begin(); it != merged.end(); ++it) {
+        const auto &kv = *it;
+        if (kv.second.tombstone) {
+            keysToRemove.push_back(kv.first);
+        }
+    }
+
+    for (const auto &key : keysToRemove) {
+        merged.erase(key);
     }
 
     userver::engine::current_task::CancellationPoint();
-
     std::ostringstream oss;
     oss << directory << "/sstable_" << std::time(nullptr) << ".dat";
     SSTable newSST(oss.str());
     newSST.write(merged);
-
     {
         std::lock_guard<userver::engine::Mutex> lock(db_mutex);
-        for (auto &f : oldFiles)
+        for (auto &f : oldFiles) {
             std::filesystem::remove(f);
+        }
         sstables.clear();
         sstables.push_back(std::make_shared<SSTable>(newSST.getFilename()));
         mergeInProgress.store(false);
@@ -151,19 +158,20 @@ void Database::mergeWorker() {
 
 std::optional<std::string> Database::selectInternal(const std::string &key) {
     {
-        auto it = memtable.find(key);
-        if (it != memtable.end()) {
-            if (it->second.tombstone)
+        DBEntry *valuePtr = memtable.find(key);
+        if (valuePtr != nullptr) {
+            if (valuePtr->tombstone) {
                 return std::nullopt;
-            return it->second.value;
+            }
+            return valuePtr->value;
         }
-
         if (flushBuffer) {
-            auto fbIt = flushBuffer->find(key);
-            if (fbIt != flushBuffer->end()) {
-                if (fbIt->second.tombstone)
+            DBEntry *fbValuePtr = flushBuffer->find(key);
+            if (fbValuePtr != nullptr) {
+                if (fbValuePtr->tombstone) {
                     return std::nullopt;
-                return fbIt->second.value;
+                }
+                return fbValuePtr->value;
             }
         }
     }
@@ -171,41 +179,51 @@ std::optional<std::string> Database::selectInternal(const std::string &key) {
     for (auto it = sstables.rbegin(); it != sstables.rend(); ++it) {
         DBEntry entry;
         if ((*it)->find(key, entry)) {
-            if (entry.tombstone)
+            if (entry.tombstone) {
                 return std::nullopt;
+            }
             return entry.value;
         }
     }
+
     return std::nullopt;
 }
 
 void Database::insert(const std::string &key, const std::string &value) {
     bool shouldFlush = false;
+
     {
         std::lock_guard<userver::engine::Mutex> lock(db_mutex);
         wal_.logInsert(key, value);
-        memtable[key] = {value, false};
+        memtable.insert(key, {value, false});
         shouldFlush = (memtable.size() >= memtableLimit);
     }
-    if (shouldFlush)
+
+    if (shouldFlush) {
         flushMemtable();
+    }
 }
 
 bool Database::remove(const std::string &key) {
     bool existed = false;
     bool shouldFlush = false;
+
     {
         std::lock_guard<userver::engine::Mutex> lock(db_mutex);
         auto existing = selectInternal(key);
-        if (!existing.has_value())
+        if (!existing.has_value()) {
             return false;
+        }
         wal_.logRemove(key);
-        memtable[key] = {"", true};
+        memtable.insert(key, {"", true});
         existed = true;
         shouldFlush = (memtable.size() >= memtableLimit);
     }
-    if (shouldFlush)
+
+    if (shouldFlush) {
         flushMemtable();
+    }
+
     return existed;
 }
 
@@ -216,16 +234,18 @@ std::optional<std::string> Database::select(const std::string &key) {
 
 void Database::flush() {
     std::lock_guard<userver::engine::Mutex> lock(db_mutex);
-    if (!memtable.empty())
+
+    if (!memtable.empty()) {
         flushMemtable();
+    }
 }
 
 void Database::merge() {
     std::lock_guard<userver::engine::Mutex> lock(db_mutex);
+
     if (!mergeInProgress.exchange(true)) {
         userver::engine::CriticalAsyncNoSpan([this] { mergeWorker(); }
         ).Detach();
     }
 }
-
 }  // namespace DB
