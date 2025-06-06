@@ -1,12 +1,16 @@
 #include "sstable.hpp"
-
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <iostream>
 #include <sstream>
 
 namespace DB {
-SSTable::SSTable(const std::string &file) : filename(file) {
+
+static constexpr const char *DATA_BLOOM_MARKER = "##BLOOM##\n";
+static constexpr const char *BLOOM_INDEX_MARKER = "##INDEX##\n";
+
+SSTable::SSTable(const std::string &file) : filename(file), bf_() {
     if (std::filesystem::exists(filename) &&
         std::filesystem::file_size(filename) > 0) {
         loadIndex();
@@ -24,13 +28,24 @@ void SSTable::loadIndex() {
         );
     }
 
-    std::string line;
-    while (std::getline(in, line) && line != "##BLOOM##") {
+    {
+        std::string line;
+        while (std::getline(in, line)) {
+            if (line == "##BLOOM##") {
+                break;
+            }
+        }
     }
-    if (!in.eof()) {
-        bf_.deserialize(in);
-    }
-    while (std::getline(in, line) && line != "##INDEX##") {
+
+    bf_.deserialize(in);
+
+    {
+        std::string line;
+        while (std::getline(in, line)) {
+            if (line == "##INDEX##") {
+                break;
+            }
+        }
     }
     if (in.eof()) {
         return;
@@ -57,17 +72,37 @@ void SSTable::write(SkipListMap<std::string, DBEntry> &data) {
 
     for (auto it = data.begin(); it != data.end(); ++it) {
         const auto &kv = *it;
-        bf_.add(kv.first);
+        const std::string &key = kv.first;
+        const DBEntry &entry = kv.second;
+
+        bf_.add(key);
+
         std::streampos pos = out.tellp();
-        newIndex[kv.first] = pos;
-        out << kv.first << " " << std::quoted(kv.second.value) << " "
-            << (kv.second.tombstone ? "1" : "0") << "\n";
+        newIndex[key] = pos;
+
+        uint32_t keySize = static_cast<uint32_t>(key.size());
+        out.write(reinterpret_cast<const char *>(&keySize), sizeof(keySize));
+        out.write(key.data(), keySize);
+
+        uint32_t valueSize = static_cast<uint32_t>(entry.value.size());
+        out.write(
+            reinterpret_cast<const char *>(&valueSize), sizeof(valueSize)
+        );
+        if (valueSize > 0) {
+            out.write(
+                reinterpret_cast<const char *>(entry.value.data()), valueSize
+            );
+        }
+
+        uint8_t tomb = entry.tombstone ? 1 : 0;
+        out.write(reinterpret_cast<const char *>(&tomb), sizeof(tomb));
     }
 
-    out << "##BLOOM##\n";
+    out << DATA_BLOOM_MARKER;
+
     bf_.serialize(out);
 
-    out << "##INDEX##\n";
+    out << BLOOM_INDEX_MARKER;
     out << newIndex.size() << "\n";
     for (const auto &e : newIndex) {
         out << e.first << " " << static_cast<long long>(e.second) << "\n";
@@ -101,39 +136,70 @@ bool SSTable::find(const std::string &key, DBEntry &entry) {
 
     in.seekg(it->second);
 
-    std::string fileKey, fileValue;
-    int tomb;
-    if (!(in >> fileKey >> std::quoted(fileValue) >> tomb)) {
-        return false;
-    }
+    uint32_t keySize = 0;
+    in.read(reinterpret_cast<char *>(&keySize), sizeof(keySize));
+    std::string fileKey(keySize, '\0');
+    in.read(&fileKey[0], keySize);
     if (fileKey != key) {
         return false;
     }
 
-    entry.value = fileValue;
-    entry.tombstone = (tomb == 1);
+    uint32_t valueSize = 0;
+    in.read(reinterpret_cast<char *>(&valueSize), sizeof(valueSize));
+    std::vector<uint8_t> blob(valueSize);
+    if (valueSize > 0) {
+        in.read(reinterpret_cast<char *>(blob.data()), valueSize);
+    }
 
+    uint8_t tomb = 0;
+    in.read(reinterpret_cast<char *>(&tomb), sizeof(tomb));
+
+    entry.value = std::move(blob);
+    entry.tombstone = (tomb == 1);
     return true;
 }
 
 std::map<std::string, DBEntry> SSTable::dump() const {
     std::map<std::string, DBEntry> outMap;
     std::ifstream in(filename, std::ios::binary);
-
     if (!in) {
         return outMap;
     }
 
-    std::string line;
-    while (std::getline(in, line) && line != "##INDEX##") {
-        std::istringstream iss(line);
-        std::string key, val;
-        int tomb;
-        if (iss >> key >> std::quoted(val) >> tomb) {
-            outMap[key] = {val, tomb == 1};
+    while (true) {
+        std::streampos posStart = in.tellg();
+
+        uint32_t keySize = 0;
+        if (!in.read(reinterpret_cast<char *>(&keySize), sizeof(keySize))) {
+            break;
         }
+
+        if (keySize == 0) {
+            in.seekg(posStart);
+            std::string possibleMarker;
+            std::getline(in, possibleMarker);
+            if (possibleMarker == "##BLOOM##") {
+                break;
+            }
+        }
+
+        std::string key(keySize, '\0');
+        in.read(&key[0], keySize);
+
+        uint32_t valueSize = 0;
+        in.read(reinterpret_cast<char *>(&valueSize), sizeof(valueSize));
+        std::vector<uint8_t> blob(valueSize);
+        if (valueSize > 0) {
+            in.read(reinterpret_cast<char *>(blob.data()), valueSize);
+        }
+
+        uint8_t tomb = 0;
+        in.read(reinterpret_cast<char *>(&tomb), sizeof(tomb));
+
+        outMap[key] = {std::move(blob), (tomb == 1)};
     }
 
     return outMap;
 }
+
 }  // namespace DB

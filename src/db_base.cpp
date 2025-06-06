@@ -1,15 +1,16 @@
-#include "database.hpp"
-
 #include <chrono>
 #include <ctime>
+#include <filesystem>
 #include <iostream>
-#include <userver/engine/task/cancel.hpp>
+#include <sstream>
+#include "database.hpp"
 
 namespace {
 static std::atomic<size_t> sstableCounter{0};
 }
 
 namespace DB {
+
 Database::Database(const std::string &dir, size_t memLimit, size_t sstLimit)
     : memtableLimit(memLimit),
       sstableLimit(sstLimit),
@@ -29,11 +30,11 @@ Database::~Database() {
 
 void Database::recoverFromWAL() {
     wal_.recover([this](
-                     const std::string &key, const std::string &value,
-                     bool tombstone
+                     const std::string &key,
+                     const std::vector<uint8_t> &valueBlob, bool tombstone
                  ) {
         std::lock_guard<userver::engine::Mutex> lock(db_mutex);
-        memtable.insert(key, {value, tombstone});
+        memtable.insert(key, {valueBlob, tombstone});
     });
 }
 
@@ -156,7 +157,9 @@ void Database::mergeWorker() {
     }
 }
 
-std::optional<std::string> Database::selectInternal(const std::string &key) {
+std::optional<std::vector<uint8_t>> Database::selectInternal(
+    const std::string &key
+) {
     {
         DBEntry *valuePtr = memtable.find(key);
         if (valuePtr != nullptr) {
@@ -189,7 +192,10 @@ std::optional<std::string> Database::selectInternal(const std::string &key) {
     return std::nullopt;
 }
 
-void Database::insert(const std::string &key, const std::string &value) {
+void Database::insert(
+    const std::string &key,
+    const std::vector<uint8_t> &value
+) {
     bool shouldFlush = false;
 
     {
@@ -215,7 +221,7 @@ bool Database::remove(const std::string &key) {
             return false;
         }
         wal_.logRemove(key);
-        memtable.insert(key, {"", true});
+        memtable.insert(key, {{}, true});
         existed = true;
         shouldFlush = (memtable.size() >= memtableLimit);
     }
@@ -227,7 +233,7 @@ bool Database::remove(const std::string &key) {
     return existed;
 }
 
-std::optional<std::string> Database::select(const std::string &key) {
+std::optional<std::vector<uint8_t>> Database::select(const std::string &key) {
     std::lock_guard<userver::engine::Mutex> lock(db_mutex);
     return selectInternal(key);
 }
@@ -248,4 +254,5 @@ void Database::merge() {
         ).Detach();
     }
 }
+
 }  // namespace DB

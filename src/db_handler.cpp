@@ -32,24 +32,26 @@ userver::formats::json::Value DatabaseHandler::
     }
 
     if (method == userver::server::http::HttpMethod::kGet) {
-        const auto value = db_.select(key);
-        if (!value) {
+        const auto opt_blob = db_.select(key);
+        if (!opt_blob) {
             throw userver::server::handlers::ResourceNotFound(error_builder{
                 "Key not found"});
         }
+        const std::string value_str(opt_blob->begin(), opt_blob->end());
         userver::formats::json::ValueBuilder response;
         response["key"] = key;
-        response["value"] = *value;
+        response["value"] = value_str;
         return response.ExtractValue();
     }
 
     else if (method == userver::server::http::HttpMethod::kPut) {
-        std::string value =
+        std::string value_str =
             request_json["value"].As<std::string>("default_value");
-        db_.insert(key, value);
+        std::vector<uint8_t> blob(value_str.begin(), value_str.end());
+        db_.insert(key, blob);
         userver::formats::json::ValueBuilder response;
         response["updated_key"] = key;
-        response["updated_value"] = value;
+        response["updated_value"] = value_str;
         return response.ExtractValue();
     }
 
