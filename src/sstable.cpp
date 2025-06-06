@@ -24,6 +24,18 @@ void SSTable::loadIndex() {
         );
     }
 
+
+  std::string line;
+  while (std::getline(in, line) && line != "##BLOOM##") {
+  }
+  if (!in.eof()) {
+    bf_.deserialize(in);
+  }
+  while (std::getline(in, line) && line != "##INDEX##") {
+  }
+  if (in.eof())
+    return;
+
     std::string line;
     while (std::getline(in, line) && line != "##INDEX##") {
     }
@@ -46,33 +58,42 @@ void SSTable::write(const std::map<std::string, DBEntry> &data) {
         throw std::runtime_error("Cannot open SSTable for write: " + filename);
     }
 
-    std::map<std::string, std::streampos> newIndex;
-    for (const auto &p : data) {
-        std::streampos pos = out.tellp();
-        newIndex[p.first] = pos;
-        out << p.first << " " << std::quoted(p.second.value) << " "
-            << (p.second.tombstone ? "1" : "0") << "\n";
-    }
-    out << "##INDEX##\n";
-    out << newIndex.size() << "\n";
-    for (const auto &e : newIndex) {
-        out << e.first << " " << static_cast<long long>(e.second) << "\n";
-    }
-    out.flush();
-    out.close();
 
-    {
-        std::lock_guard<std::mutex> lock(indexMutex);
-        index = std::move(newIndex);
-    }
+  bf_ = BloomFilter(data.size() * 10, 7);
+  std::map<std::string, std::streampos> newIndex;
+  for (const auto &p : data) {
+    bf_.add(p.first);
+    std::streampos pos = out.tellp();
+    newIndex[p.first] = pos;
+    out << p.first << " " << std::quoted(p.second.value) << " "
+        << (p.second.tombstone ? "1" : "0") << "\n";
+  }
+  out << "##BLOOM##\n";
+  bf_.serialize(out);
+  out << "##INDEX##\n";
+  out << newIndex.size() << "\n";
+  for (const auto &e : newIndex) {
+    out << e.first << " " << static_cast<long long>(e.second) << "\n";
+  }
+  out.flush();
+  out.close();
+
+   {
+       std::lock_guard<std::mutex> lock(indexMutex);
+       index = std::move(newIndex);
+   }
 }
 
 bool SSTable::find(const std::string &key, DBEntry &entry) {
-    std::lock_guard<std::mutex> lock(indexMutex);
-    auto it = index.find(key);
-    if (it == index.end())
-        return false;
 
+  std::lock_guard<std::mutex> lock(indexMutex);
+  if (!bf_.possiblyContains(key))
+    return false;
+  auto it = index.find(key);
+  if (it == index.end())
+    return false;
+
+    
     std::ifstream in(filename, std::ios::binary);
     if (!in)
         return false;

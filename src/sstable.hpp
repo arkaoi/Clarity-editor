@@ -1,6 +1,9 @@
 #ifndef SSTABLE_HPP_
 #define SSTABLE_HPP_
 
+
+#include "bloom.hpp"
+
 #include <map>
 #include <mutex>
 #include <optional>
@@ -21,11 +24,14 @@ public:
 
 class SSTable : public ISSTable {
 private:
-    std::string filename;
-    mutable std::mutex indexMutex;
-    std::map<std::string, std::streampos> index;
 
-    void loadIndex();
+  std::string filename;
+  mutable std::mutex indexMutex;
+  std::map<std::string, std::streampos> index;
+  BloomFilter bf_;
+
+
+  void loadIndex();
 
 public:
     explicit SSTable(const std::string &file);
