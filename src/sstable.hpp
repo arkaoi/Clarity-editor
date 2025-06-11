@@ -15,7 +15,7 @@ namespace DB {
 class ISSTable {
 public:
     virtual void write(SkipListMap<std::string, DBEntry> &data) = 0;
-    virtual bool find(const std::string &key, DBEntry &entry) = 0;
+    virtual bool find(const std::string &key, DBEntry &entry) const = 0;
     virtual std::map<std::string, DBEntry> dump() const = 0;
 
     virtual ~ISSTable() {
@@ -34,8 +34,12 @@ private:
 public:
     explicit SSTable(const std::string &file);
     void write(SkipListMap<std::string, DBEntry> &data) override;
-    bool find(const std::string &key, DBEntry &entry) override;
+    bool find(const std::string &key, DBEntry &entry) const override;
     std::map<std::string, DBEntry> dump() const override;
+
+    const std::map<std::string, std::streampos> &GetIndex() const {
+        return index;
+    }
 
     const std::string &getFilename() const {
         return filename;

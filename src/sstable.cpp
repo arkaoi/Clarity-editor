@@ -19,45 +19,47 @@ SSTable::SSTable(const std::string &file) : filename(file), bf_() {
 
 void SSTable::loadIndex() {
     std::lock_guard<std::mutex> lock(indexMutex);
-
     index.clear();
-    std::ifstream in(filename, std::ios::binary);
-    if (!in) {
-        throw std::runtime_error(
-            "Cannot open SSTable for index load: " + filename
-        );
-    }
 
-    {
-        std::string line;
-        while (std::getline(in, line)) {
-            if (line == "##BLOOM##") {
-                break;
-            }
-        }
+    std::ifstream in(filename, std::ios::binary);
+    if (!in)
+        throw std::runtime_error("Cannot open SSTable: " + filename);
+
+    const std::string bloomMarker(DATA_BLOOM_MARKER);
+    std::string window;
+    window.reserve(bloomMarker.size());
+    char ch;
+    while (in.get(ch)) {
+        window.push_back(ch);
+        if (window.size() > bloomMarker.size())
+            window.erase(0, 1);
+        if (window == bloomMarker)
+            break;
     }
+    if (in.eof())
+        return;
 
     bf_.deserialize(in);
 
-    {
-        std::string line;
-        while (std::getline(in, line)) {
-            if (line == "##INDEX##") {
-                break;
-            }
-        }
+    const std::string indexMarker(BLOOM_INDEX_MARKER);
+    window.clear();
+    while (in.get(ch)) {
+        window.push_back(ch);
+        if (window.size() > indexMarker.size())
+            window.erase(0, 1);
+        if (window == indexMarker)
+            break;
     }
-    if (in.eof()) {
+    if (in.eof())
         return;
-    }
 
     size_t count = 0;
     in >> count;
     for (size_t i = 0; i < count; ++i) {
         std::string key;
-        long long off_ll;
-        in >> key >> off_ll;
-        index[key] = static_cast<std::streampos>(off_ll);
+        long long off;
+        in >> key >> off;
+        index[key] = static_cast<std::streampos>(off);
     }
 }
 
@@ -117,7 +119,7 @@ void SSTable::write(SkipListMap<std::string, DBEntry> &data) {
     }
 }
 
-bool SSTable::find(const std::string &key, DBEntry &entry) {
+bool SSTable::find(const std::string &key, DBEntry &entry) const {
     std::lock_guard<std::mutex> lock(indexMutex);
 
     if (!bf_.possiblyContains(key)) {
@@ -160,45 +162,19 @@ bool SSTable::find(const std::string &key, DBEntry &entry) {
 }
 
 std::map<std::string, DBEntry> SSTable::dump() const {
+    std::map<std::string, std::streampos> idx_copy;
+    {
+        std::lock_guard<std::mutex> lock(indexMutex);
+        idx_copy = index;
+    }
+
     std::map<std::string, DBEntry> outMap;
-    std::ifstream in(filename, std::ios::binary);
-    if (!in) {
-        return outMap;
+    for (auto &p : idx_copy) {
+        DBEntry e;
+        if (find(p.first, e)) {
+            outMap[p.first] = std::move(e);
+        }
     }
-
-    while (true) {
-        std::streampos posStart = in.tellg();
-
-        uint32_t keySize = 0;
-        if (!in.read(reinterpret_cast<char *>(&keySize), sizeof(keySize))) {
-            break;
-        }
-
-        if (keySize == 0) {
-            in.seekg(posStart);
-            std::string possibleMarker;
-            std::getline(in, possibleMarker);
-            if (possibleMarker == "##BLOOM##") {
-                break;
-            }
-        }
-
-        std::string key(keySize, '\0');
-        in.read(&key[0], keySize);
-
-        uint32_t valueSize = 0;
-        in.read(reinterpret_cast<char *>(&valueSize), sizeof(valueSize));
-        std::vector<uint8_t> blob(valueSize);
-        if (valueSize > 0) {
-            in.read(reinterpret_cast<char *>(blob.data()), valueSize);
-        }
-
-        uint8_t tomb = 0;
-        in.read(reinterpret_cast<char *>(&tomb), sizeof(tomb));
-
-        outMap[key] = {std::move(blob), (tomb == 1)};
-    }
-
     return outMap;
 }
 

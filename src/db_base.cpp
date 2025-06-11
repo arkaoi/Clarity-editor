@@ -111,48 +111,58 @@ void Database::flushMemtable() {
 
 void Database::mergeWorker() {
     userver::engine::current_task::CancellationPoint();
-    std::vector<std::shared_ptr<SSTable>> batch;
 
+    std::vector<std::shared_ptr<SSTable>> old_list;
     {
-        std::lock_guard<userver::engine::Mutex> lock(db_mutex);
-        batch = sstables;
+        std::lock_guard lock(db_mutex);
+        old_list = sstables;
     }
 
     SkipListMap<std::string, DBEntry> merged;
     std::vector<std::string> oldFiles;
-    for (auto &sst : batch) {
+    for (const auto &sst : old_list) {
         userver::engine::current_task::CancellationPoint();
         auto dump = sst->dump();
-        for (auto &p : dump) {
+        for (const auto &p : dump) {
             merged.insert(p.first, p.second);
         }
         oldFiles.push_back(sst->getFilename());
     }
 
     std::vector<std::string> keysToRemove;
-    for (auto it = merged.begin(); it != merged.end(); ++it) {
-        const auto &kv = *it;
-        if (kv.second.tombstone) {
-            keysToRemove.push_back(kv.first);
+    for (auto p : merged) {
+        if (p.second.tombstone) {
+            keysToRemove.push_back(p.first);
         }
     }
-
-    for (const auto &key : keysToRemove) {
-        merged.erase(key);
+    for (const auto &k : keysToRemove) {
+        merged.erase(k);
     }
 
     userver::engine::current_task::CancellationPoint();
+
     std::ostringstream oss;
     oss << directory << "/sstable_" << std::time(nullptr) << ".dat";
     SSTable newSST(oss.str());
     newSST.write(merged);
+
     {
-        std::lock_guard<userver::engine::Mutex> lock(db_mutex);
-        for (auto &f : oldFiles) {
-            std::filesystem::remove(f);
+        std::lock_guard lock(db_mutex);
+        for (const auto &fname : oldFiles) {
+            std::filesystem::remove(fname);
         }
-        sstables.clear();
-        sstables.push_back(std::make_shared<SSTable>(newSST.getFilename()));
+
+        std::vector<std::shared_ptr<SSTable>> survivors;
+        survivors.reserve(sstables.size());
+        for (auto &sst : sstables) {
+            if (std::find(
+                    oldFiles.begin(), oldFiles.end(), sst->getFilename()
+                ) == oldFiles.end()) {
+                survivors.push_back(sst);
+            }
+        }
+        survivors.push_back(std::make_shared<SSTable>(newSST.getFilename()));
+        sstables = std::move(survivors);
         mergeInProgress.store(false);
     }
 }
