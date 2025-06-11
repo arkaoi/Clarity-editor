@@ -1,5 +1,9 @@
 #include "db_handler.hpp"
+#include <userver/formats/json/serialize.hpp>
 #include <userver/server/handlers/exceptions.hpp>
+
+using userver::formats::json::FromString;
+using userver::formats::json::ToString;
 
 namespace userver_db {
 
@@ -31,27 +35,31 @@ userver::formats::json::Value DatabaseHandler::
             "Key not provided"});
     }
 
+    userver::formats::json::ValueBuilder response;
     if (method == userver::server::http::HttpMethod::kGet) {
         const auto opt_blob = db_.select(key);
         if (!opt_blob) {
             throw userver::server::handlers::ResourceNotFound(error_builder{
                 "Key not found"});
         }
-        const std::string value_str(opt_blob->begin(), opt_blob->end());
-        userver::formats::json::ValueBuilder response;
+
+        std::string serialized(opt_blob->begin(), opt_blob->end());
+        auto json_value = FromString(serialized);
+
         response["key"] = key;
-        response["value"] = value_str;
+        response["value"] = json_value;
         return response.ExtractValue();
     }
 
     else if (method == userver::server::http::HttpMethod::kPut) {
-        std::string value_str =
-            request_json["value"].As<std::string>("default_value");
-        std::vector<uint8_t> blob(value_str.begin(), value_str.end());
+        auto json_value = request_json["value"];
+        std::string serialized = ToString(json_value);
+
+        std::vector<uint8_t> blob(serialized.begin(), serialized.end());
         db_.insert(key, blob);
-        userver::formats::json::ValueBuilder response;
+
         response["updated_key"] = key;
-        response["updated_value"] = value_str;
+        response["updated_value"] = json_value;
         return response.ExtractValue();
     }
 
