@@ -1,5 +1,4 @@
 #include "bloom.hpp"
-
 #include <cmath>
 
 namespace DB {
