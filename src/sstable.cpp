@@ -36,12 +36,6 @@ void SSTable::loadIndex() {
   if (in.eof())
     return;
 
-    std::string line;
-    while (std::getline(in, line) && line != "##INDEX##") {
-    }
-    if (in.eof())
-        return;
-
     size_t count = 0;
     in >> count;
     for (size_t i = 0; i < count; ++i) {
