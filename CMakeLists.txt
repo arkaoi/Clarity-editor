@@ -26,16 +26,16 @@ if(NOT Boost_FOUND)
 endif()
 
 add_library(${PROJECT_NAME}_objs OBJECT
-    src/db_base.cpp
-    src/sstable.cpp
-    src/wal.cpp
-    src/bloom.cpp
+    src/base/db_base.cpp
+    src/sstable/sstable.cpp
+    src/wal/wal.cpp
+    src/bloom/bloom.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}_objs PUBLIC userver::core Boost::iostreams)
 
 add_executable(${PROJECT_NAME} src/main.cpp
-        src/db_handler.cpp)
+        src/handlers/db_handler.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_objs)
 
 add_executable(${PROJECT_NAME}_unittest

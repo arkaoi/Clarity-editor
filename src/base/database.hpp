@@ -3,25 +3,23 @@
 
 #include <atomic>
 #include <filesystem>
-#include <map>
 #include <memory>
 #include <optional>
 #include <sstream>
 #include <string>
 #include <userver/engine/async.hpp>
-#include <userver/engine/mutex.hpp>
 #include <vector>
 #include "db_entry.hpp"
-#include "sstable.hpp"
-#include "wal.hpp"
+#include "../skiplist/skiplist.hpp"
+#include "../sstable/sstable.hpp"
+#include "../wal/wal.hpp"
 
 namespace DB {
-
 class Database {
 private:
-    std::map<std::string, DBEntry> memtable;
+    SkipListMap<std::string, DBEntry> memtable;
     std::vector<std::shared_ptr<SSTable>> sstables;
-    std::optional<std::map<std::string, DBEntry>> flushBuffer;
+    std::unique_ptr<SkipListMap<std::string, DBEntry>> flushBuffer;
 
     size_t memtableLimit;
     size_t sstableLimit;
@@ -36,15 +34,15 @@ private:
     void mergeWorker();
     void recoverFromWAL();
     void loadSSTables();
-    std::optional<std::string> selectInternal(const std::string &key);
+    std::optional<std::vector<uint8_t>> selectInternal(const std::string &key);
 
 public:
     Database(const std::string &directory, size_t memLimit, size_t sstLimit);
     ~Database();
 
-    void insert(const std::string &key, const std::string &value);
+    void insert(const std::string &key, const std::vector<uint8_t> &value);
     bool remove(const std::string &key);
-    std::optional<std::string> select(const std::string &key);
+    std::optional<std::vector<uint8_t>> select(const std::string &key);
     void flush();
     void merge();
 };

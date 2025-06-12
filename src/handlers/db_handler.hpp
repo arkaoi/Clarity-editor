@@ -6,8 +6,8 @@
 #include <userver/server/handlers/http_handler_json_base.hpp>
 #include <userver/server/http/http_request.hpp>
 #include <userver/server/request/request_context.hpp>
-#include "database.hpp"
-#include "db_config.hpp"
+#include "../base/database.hpp"
+#include "../configs/db_config.hpp"
 
 namespace userver_db {
 

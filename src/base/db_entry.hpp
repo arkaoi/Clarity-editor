@@ -1,12 +1,13 @@
 #ifndef DB_ENTRY_HPP_
 #define DB_ENTRY_HPP_
 
-#include <string>
+#include <cstdint>
+#include <vector>
 
 namespace DB {
 
 struct DBEntry {
-    std::string value;
+    std::vector<uint8_t> value;
     bool tombstone = false;
 };
 
