@@ -1,38 +1,34 @@
 #ifndef DATABASE_HPP_
 #define DATABASE_HPP_
 
+#include "db_entry.hpp"
+#include "skiplist.hpp"
+#include "sstable.hpp"
+#include "wal.hpp"
 #include <atomic>
 #include <filesystem>
 #include <memory>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <userver/engine/async.hpp>
 #include <vector>
-#include "db_entry.hpp"
-#include "../skiplist/skiplist.hpp"
-#include "../sstable/sstable.hpp"
-#include "../wal/wal.hpp"
 
 namespace DB {
+
 class Database {
 private:
     SkipListMap<std::string, DBEntry> memtable;
     std::vector<std::shared_ptr<SSTable>> sstables;
     std::unique_ptr<SkipListMap<std::string, DBEntry>> flushBuffer;
-
     size_t memtableLimit;
     size_t sstableLimit;
-
     std::string directory;
-    DB::WAL wal_;
-
+    WAL wal_;
     mutable userver::engine::Mutex db_mutex;
     std::atomic<bool> mergeInProgress{false};
 
     void flushMemtable();
     void mergeWorker();
-    void recoverFromWAL();
     void loadSSTables();
     std::optional<std::vector<uint8_t>> selectInternal(const std::string &key);
 
@@ -45,8 +41,10 @@ public:
     std::optional<std::vector<uint8_t>> select(const std::string &key);
     void flush();
     void merge();
+    void SnapshotCsv(const std::string &csv_path) const;
+    void recoverFromWAL();
 };
 
-}  // namespace DB
+} // namespace DB
 
-#endif  // DATABASE_HPP_
+#endif // DATABASE_HPP_

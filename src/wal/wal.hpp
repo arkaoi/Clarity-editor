@@ -19,12 +19,11 @@ public:
     WAL(const std::string &filename);
     ~WAL();
 
-    void
-    logInsert(const std::string &key, const std::vector<uint8_t> &valueBlob);
+    void logInsert(const std::string &key, const std::vector<uint8_t> &valueBlob);
     void logRemove(const std::string &key);
 
-    void recover(std::function<
-                 void(const std::string &, const std::vector<uint8_t> &, bool)>
+    void recover(std::function<void(const std::string &,
+                                    const std::vector<uint8_t> &, bool)>
                      applyOperation);
 
     void clear();
@@ -36,6 +35,6 @@ private:
     std::unique_ptr<boost_file_sink> out_;
 };
 
-}  // namespace DB
+} // namespace DB
 
-#endif  // WAL_HPP_
+#endif // WAL_HPP_

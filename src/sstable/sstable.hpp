@@ -1,15 +1,15 @@
 #ifndef SSTABLE_HPP_
 #define SSTABLE_HPP_
 
+#include "bloom.hpp"
+#include "db_entry.hpp"
+#include "skiplist.hpp"
 #include <filesystem>
 #include <fstream>
 #include <map>
 #include <mutex>
 #include <optional>
 #include <string>
-#include "../bloom/bloom.hpp"
-#include "../base/db_entry.hpp"
-#include "../skiplist/skiplist.hpp"
 
 namespace DB {
 class ISSTable {
@@ -18,8 +18,7 @@ public:
     virtual bool find(const std::string &key, DBEntry &entry) const = 0;
     virtual std::map<std::string, DBEntry> dump() const = 0;
 
-    virtual ~ISSTable() {
-    }
+    virtual ~ISSTable() {}
 };
 
 class SSTable : public ISSTable {
@@ -41,11 +40,9 @@ public:
         return index;
     }
 
-    const std::string &getFilename() const {
-        return filename;
-    }
+    const std::string &getFilename() const { return filename; }
 };
 
-}  // namespace DB
+} // namespace DB
 
-#endif  // SSTABLE_HPP_
+#endif // SSTABLE_HPP_

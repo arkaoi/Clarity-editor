@@ -58,6 +58,10 @@ components_manager:
       path: /database/{key}
       method: GET,DELETE,PUT
       task_processor: main-task-processor
+    handler-snapshot:
+      path: /snapshot
+      method: GET
+      task_processor: main-task-processor
 
     tracer:
       service-name: my-service

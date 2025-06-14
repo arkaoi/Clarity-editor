@@ -4,8 +4,7 @@
 namespace DB {
 
 BloomFilter::BloomFilter(size_t size, size_t hashes)
-    : bitSize(size), numHashes(hashes), bits(size, false) {
-}
+    : bitSize(size), numHashes(hashes), bits(size, false) {}
 
 uint64_t BloomFilter::hash1(const std::string &key) const {
     return std::hash<std::string>{}(key);
@@ -69,4 +68,4 @@ void BloomFilter::deserialize(std::istream &is) {
     }
 }
 
-}  // namespace DB
+} // namespace DB
