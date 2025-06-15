@@ -1,10 +1,10 @@
 #pragma once
-#include "database.hpp"
-#include "db_config.hpp"
 #include <fstream>
 #include <iterator>
 #include <string>
 #include <userver/server/handlers/http_handler_json_base.hpp>
+#include "../base/database.hpp"
+#include "../configs/db_config.hpp"
 
 namespace userver_db {
 
@@ -14,10 +14,9 @@ public:
     static constexpr std::string_view kName = "handler-snapshot";
     using HttpHandlerJsonBase::HttpHandlerJsonBase;
 
-    userver::formats::json::Value HandleRequestJsonThrow(
-        const userver::server::http::HttpRequest &request,
-        const userver::formats::json::Value &request_json,
-        userver::server::request::RequestContext &) const override {
+    userver::formats::json::Value
+    HandleRequestJsonThrow(const userver::server::http::HttpRequest &request, const userver::formats::json::Value &request_json, userver::server::request::RequestContext &)
+        const override {
         db_.recoverFromWAL();
         const std::string csv_path =
             std::string(DBConfig::kDirectory) + "/snapshot.csv";
@@ -32,8 +31,9 @@ public:
     }
 
 private:
-    mutable DB::Database db_{DBConfig::kDirectory, DBConfig::kMemtableLimit,
-                             DBConfig::kSstableLimit};
+    mutable DB::Database db_{
+        DBConfig::kDirectory, DBConfig::kMemtableLimit,
+        DBConfig::kSstableLimit};
 };
 
-} // namespace userver_db
+}  // namespace userver_db

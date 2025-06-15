@@ -30,6 +30,6 @@ private:
     uint64_t nthHash(uint64_t h1, uint64_t h2, size_t i) const;
 };
 
-} // namespace DB
+}  // namespace DB
 
-#endif // BLOOM_FILTER_HPP_
+#endif  // BLOOM_FILTER_HPP_

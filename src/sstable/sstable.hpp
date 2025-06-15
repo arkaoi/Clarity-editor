@@ -1,9 +1,9 @@
 #ifndef SSTABLE_HPP_
 #define SSTABLE_HPP_
 
-#include "bloom.hpp"
-#include "db_entry.hpp"
-#include "skiplist.hpp"
+#include "../bloom/bloom.hpp"
+#include "../base/db_entry.hpp"
+#include "../skiplist/skiplist.hpp"
 #include <filesystem>
 #include <fstream>
 #include <map>

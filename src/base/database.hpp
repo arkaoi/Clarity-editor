@@ -1,10 +1,6 @@
 #ifndef DATABASE_HPP_
 #define DATABASE_HPP_
 
-#include "db_entry.hpp"
-#include "skiplist.hpp"
-#include "sstable.hpp"
-#include "wal.hpp"
 #include <atomic>
 #include <filesystem>
 #include <memory>
@@ -12,6 +8,10 @@
 #include <string>
 #include <userver/engine/async.hpp>
 #include <vector>
+#include "../skiplist/skiplist.hpp"
+#include "../sstable/sstable.hpp"
+#include "../wal/wal.hpp"
+#include "db_entry.hpp"
 
 namespace DB {
 
@@ -45,6 +45,6 @@ public:
     void recoverFromWAL();
 };
 
-} // namespace DB
+}  // namespace DB
 
-#endif // DATABASE_HPP_
+#endif  // DATABASE_HPP_
